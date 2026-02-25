@@ -38,10 +38,19 @@ export default function RightPanel({
   const resultRef = useRef<HTMLDivElement>(null);
 
   const handleCopy = async () => {
-    const content = activeAction === 'review' && atsScore
-      ? `ATS Score: ${atsScore.total_score}/100\n\n${text}`
-      : text;
-    await navigator.clipboard.writeText(content);
+    if (activeAction === 'review' && atsScore) {
+      const lines: string[] = [`ATS Score: ${atsScore.total_score}/100`];
+      if (atsScore.overall_summary) lines.push(atsScore.overall_summary);
+      lines.push('');
+      for (const [key, item] of Object.entries(atsScore.breakdown)) {
+        const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+        lines.push(`${label}: ${item.score}/${item.max} (${item.status})`);
+        if (item.suggestion) lines.push(`  Suggestion: ${item.suggestion}`);
+      }
+      await navigator.clipboard.writeText(lines.join('\n'));
+    } else {
+      await navigator.clipboard.writeText(text);
+    }
   };
 
   const handleDownloadPdf = async () => {
@@ -140,14 +149,9 @@ export default function RightPanel({
           </Box>
         )}
 
-        {/* Streaming text */}
-        {(text || loading) && (
+        {/* Streaming text — hidden for review; all detail is in ATSScoreCard */}
+        {(text || loading) && activeAction !== 'review' && (
           <Box>
-            {activeAction === 'review' && (
-              <Typography variant="subtitle2" fontWeight={700} gutterBottom>
-                Improvement Suggestions
-              </Typography>
-            )}
             <Typography
               variant="body2"
               component="pre"

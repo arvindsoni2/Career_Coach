@@ -5,10 +5,15 @@ export interface ATSBreakdownItem {
   score: number;
   max: number;
   note: string;
+  status: 'good' | 'attention' | 'critical';
+  strengths: string[];
+  gaps: string[];
+  suggestion: string;
 }
 
 export interface ATSScore {
   total_score: number;
+  overall_summary?: string;
   breakdown: {
     keyword_match: ATSBreakdownItem;
     experience_alignment: ATSBreakdownItem;

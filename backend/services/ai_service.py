@@ -9,23 +9,64 @@ _client: genai.Client | None = None
 MODEL = "gemini-2.5-flash"
 
 REVIEW_SYSTEM = """You are an expert ATS (Applicant Tracking System) analyst and career coach with 15 years of experience.
-Analyze the provided resume against the job description.
+Analyze the provided resume against the job description and return ONLY a single JSON code block — no text before or after it.
 
-Your response MUST follow this exact structure:
-1. First, output a JSON block (and nothing else before it) in this exact format:
+Output this exact JSON structure:
 ```json
 {
   "total_score": <integer 0-100>,
+  "overall_summary": "<one concise sentence, max 20 words, summarising the candidate's biggest strength and biggest gap>",
   "breakdown": {
-    "keyword_match":        {"score": <0-30>, "max": 30, "note": "<brief explanation>"},
-    "experience_alignment": {"score": <0-25>, "max": 25, "note": "<brief explanation>"},
-    "skills_coverage":      {"score": <0-20>, "max": 20, "note": "<brief explanation>"},
-    "completeness":         {"score": <0-15>, "max": 15, "note": "<brief explanation>"},
-    "format_quality":       {"score": <0-10>, "max": 10, "note": "<brief explanation>"}
+    "keyword_match": {
+      "score": <integer 0-30>, "max": 30,
+      "note": "<brief one-line note>",
+      "status": "<'good' if score/max >= 0.75, 'attention' if >= 0.50, else 'critical'>",
+      "strengths": ["<specific keyword or phrase present in resume that matches JD>"],
+      "gaps": ["<specific keyword or requirement from JD that is missing from resume>"],
+      "suggestion": "<one concrete actionable fix — empty string if gaps is empty>"
+    },
+    "experience_alignment": {
+      "score": <integer 0-25>, "max": 25,
+      "note": "<brief one-line note>",
+      "status": "<'good' | 'attention' | 'critical'>",
+      "strengths": ["<specific strength present>"],
+      "gaps": ["<specific gap or missing requirement>"],
+      "suggestion": "<actionable fix or empty string>"
+    },
+    "skills_coverage": {
+      "score": <integer 0-20>, "max": 20,
+      "note": "<brief one-line note>",
+      "status": "<'good' | 'attention' | 'critical'>",
+      "strengths": ["<specific skill present that matches JD>"],
+      "gaps": ["<specific skill from JD missing in resume>"],
+      "suggestion": "<actionable fix or empty string>"
+    },
+    "completeness": {
+      "score": <integer 0-15>, "max": 15,
+      "note": "<brief one-line note>",
+      "status": "<'good' | 'attention' | 'critical'>",
+      "strengths": ["<section or element that is well represented>"],
+      "gaps": ["<missing section or element>"],
+      "suggestion": "<actionable fix or empty string>"
+    },
+    "format_quality": {
+      "score": <integer 0-10>, "max": 10,
+      "note": "<brief one-line note>",
+      "status": "<'good' | 'attention' | 'critical'>",
+      "strengths": ["<formatting element done well>"],
+      "gaps": ["<formatting issue>"],
+      "suggestion": "<actionable fix or empty string>"
+    }
   }
 }
 ```
-2. After the JSON block, add a blank line, then provide 5-8 specific, prioritized, actionable improvement suggestions. Number each suggestion. Be specific — reference actual content from the resume and JD."""
+Rules:
+- status MUST be computed from score/max: >= 0.75 → "good", >= 0.50 → "attention", < 0.50 → "critical"
+- strengths: list 1-4 specific items present in the resume that satisfy JD requirements
+- gaps: list specific items from the JD that are absent; empty array [] if none
+- suggestion: one concrete sentence telling the candidate exactly what to add or change; use empty string "" if gaps is empty
+- overall_summary: exactly one sentence, max 20 words
+- Output ONLY the JSON code block. No preamble, no follow-up text."""
 
 REWRITE_SYSTEM = """You are an expert resume writer with deep knowledge of ATS systems and hiring practices.
 Rewrite the provided resume to maximize ATS compatibility and appeal for the specific job description.
