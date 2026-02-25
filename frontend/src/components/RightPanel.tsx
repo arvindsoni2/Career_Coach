@@ -55,18 +55,128 @@ export default function RightPanel({
 
   const handleDownloadPdf = async () => {
     const { default: jsPDF } = await import('jspdf');
-    const { default: html2canvas } = await import('html2canvas');
+    const filename = activeAction === 'cover-letter' ? 'cover-letter.pdf' : 'resume-output.pdf';
 
+    if (activeAction === 'rewrite' || activeAction === 'cover-letter') {
+      // ── Text-based PDF: proper typography, multi-page, no truncation ──────
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'pt', format: 'a4' });
+      const pageW = pdf.internal.pageSize.getWidth();
+      const pageH = pdf.internal.pageSize.getHeight();
+      const mL = 50, mR = 50, mT = 55, mB = 55;
+      const usableW = pageW - mL - mR;
+      let y = mT;
+      let lineIndex = 0;
+
+      const checkBreak = (needed: number) => {
+        if (y + needed > pageH - mB) { pdf.addPage(); y = mT; }
+      };
+
+      for (const rawLine of text.split('\n')) {
+        // Strip any residual markdown the model may emit
+        const line = rawLine.replace(/\*\*/g, '').replace(/^#+\s*/, '').trim();
+
+        if (line === '') { y += 8; continue; }
+
+        const isAllCaps = /^[A-Z][A-Z0-9\s\-&/()+]+$/.test(line) && line.length > 3;
+        const isBullet = /^[•\-\*]\s/.test(line);
+        const isContactLine = lineIndex === 1 && (line.includes('@') || line.includes('|'));
+
+        if (lineIndex === 0) {
+          // Name — centred, large
+          checkBreak(26);
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(17);
+          pdf.setTextColor(20, 20, 20);
+          pdf.text(line, pageW / 2, y, { align: 'center' });
+          y += 22;
+        } else if (isContactLine) {
+          // Contact row — centred, muted
+          checkBreak(16);
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(9);
+          pdf.setTextColor(90, 90, 90);
+          pdf.text(line, pageW / 2, y, { align: 'center' });
+          pdf.setTextColor(0, 0, 0);
+          y += 16;
+        } else if (isAllCaps && !isBullet) {
+          // Section header — bold with underline rule
+          checkBreak(28);
+          y += 8;
+          pdf.setFont('helvetica', 'bold');
+          pdf.setFontSize(11);
+          pdf.setTextColor(30, 30, 30);
+          pdf.text(line, mL, y);
+          y += 4;
+          pdf.setDrawColor(160, 160, 160);
+          pdf.setLineWidth(0.5);
+          pdf.line(mL, y, pageW - mR, y);
+          pdf.setTextColor(0, 0, 0);
+          y += 10;
+        } else if (isBullet) {
+          // Bullet point — indented
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(10);
+          const bulletText = line.replace(/^[•\-\*]\s*/, '');
+          const wrapped = pdf.splitTextToSize(bulletText, usableW - 14);
+          checkBreak(13 * wrapped.length);
+          pdf.text('•', mL, y);
+          pdf.text(wrapped, mL + 12, y);
+          y += 13 * wrapped.length;
+        } else {
+          // Regular line (job title row, paragraph text, etc.)
+          pdf.setFont('helvetica', 'normal');
+          pdf.setFontSize(10);
+          pdf.setTextColor(20, 20, 20);
+          const wrapped = pdf.splitTextToSize(line, usableW);
+          checkBreak(13 * wrapped.length);
+          pdf.text(wrapped, mL, y);
+          y += 13 * wrapped.length;
+        }
+
+        lineIndex++;
+      }
+
+      pdf.save(filename);
+      return;
+    }
+
+    // ── Review: html2canvas with full-height expansion + multi-page slicing ──
+    const { default: html2canvas } = await import('html2canvas');
     if (!resultRef.current) return;
-    const canvas = await html2canvas(resultRef.current, { scale: 2 });
-    const imgData = canvas.toDataURL('image/png');
-    const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
-    const pdfWidth = pdf.internal.pageSize.getWidth();
-    const pdfHeight = (canvas.height * pdfWidth) / canvas.width;
-    pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
-    const fileName =
-      activeAction === 'cover-letter' ? 'cover-letter.pdf' : 'resume-output.pdf';
-    pdf.save(fileName);
+    const el = resultRef.current;
+
+    // Temporarily expand the scrollable container so html2canvas captures everything
+    const prev = { overflow: el.style.overflow, height: el.style.height, maxHeight: el.style.maxHeight };
+    el.style.overflow = 'visible';
+    el.style.height = `${el.scrollHeight}px`;
+    el.style.maxHeight = 'none';
+
+    try {
+      const canvas = await html2canvas(el, { scale: 2, useCORS: true });
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+      const pdfW = pdf.internal.pageSize.getWidth();
+      const pdfPageH = pdf.internal.pageSize.getHeight();
+      const imgH = (canvas.height * pdfW) / canvas.width;
+      let heightLeft = imgH;
+      let position = 0;
+
+      pdf.addImage(imgData, 'PNG', 0, position, pdfW, imgH);
+      heightLeft -= pdfPageH;
+
+      while (heightLeft > 0) {
+        position -= pdfPageH;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, position, pdfW, imgH);
+        heightLeft -= pdfPageH;
+      }
+
+      pdf.save(filename);
+    } finally {
+      el.style.overflow = prev.overflow;
+      el.style.height = prev.height;
+      el.style.maxHeight = prev.maxHeight;
+    }
   };
 
   const isEmpty = !loading && !text && !atsScore && !error;

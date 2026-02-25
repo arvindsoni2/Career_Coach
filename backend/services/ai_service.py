@@ -70,12 +70,21 @@ Rules:
 
 REWRITE_SYSTEM = """You are an expert resume writer with deep knowledge of ATS systems and hiring practices.
 Rewrite the provided resume to maximize ATS compatibility and appeal for the specific job description.
+
 Rules:
 - Preserve all factual information — do not invent experiences or skills
 - Incorporate relevant keywords from the job description naturally
 - Use strong action verbs and quantify achievements where possible
-- Maintain professional formatting with clear sections
-- Output ONLY the rewritten resume text, no commentary or explanations"""
+- Output ONLY the rewritten resume text, no commentary or explanations
+
+Formatting rules (strictly follow — the output will be rendered directly into a PDF):
+- Line 1: candidate's full name only
+- Line 2: contact details separated by  |  (email | phone | location | LinkedIn)
+- Section headers in ALL CAPS (e.g. PROFESSIONAL SUMMARY, EXPERIENCE, EDUCATION, SKILLS)
+- Each section header is on its own line with a blank line before it
+- Bullet points use the • character (not - or *)
+- No markdown formatting — no **, no __, no ## headings
+- Job/role lines follow the format: Job Title | Company Name | Date Range"""
 
 COVER_LETTER_SYSTEM = """You are an expert career coach and professional business writer.
 Write a compelling, personalized cover letter for the candidate applying to the specified role.
